@@ -23,8 +23,10 @@ RESET = "\033[0m"
 
 # Clear output directory if it exists, then create it
 if os.path.exists(Output_dir):
-    print(f"{ORANGE}Found exsting chunks directory. Clearing it...{RESET}")
-    shutil.rmtree(Output_dir)
+    print(f"{ORANGE}Found existing chunks directory. Clearing it...{RESET}")
+    shutil.rmtree(Output_dir)  
+
+# Always create the directory (whether it existed before or not)
 os.makedirs(Output_dir, exist_ok=True)
 
 # Split audio file into 30-second chunks to prevent model collapse
