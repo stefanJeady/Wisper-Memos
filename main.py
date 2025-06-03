@@ -4,10 +4,8 @@ import os
 import subprocess
 import glob
 import time
-import sys
 import shutil
 import threading
-import queue
 from faster_whisper import WhisperModel
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -63,7 +61,13 @@ def transcribe_chunk(chunk_data):
         with progress_lock:
             print(f"{GREEN}Starting Chunk {RESET}{idx}/{total_chunks}")
         
-        segments, _ = model.transcribe(chunk_file, beam_size=5, word_timestamps=True)
+        segments, _ = model.transcribe(
+            chunk_file, 
+            beam_size=15, 
+            word_timestamps=False, 
+            temperature=0,
+            condition_on_previous_text=False
+        )
         
         for segment in segments:
             text = segment.text.strip()
