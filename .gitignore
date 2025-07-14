@@ -1,5 +1,6 @@
-/chunk_audio
-/chunk_text
+/audio_chunks
+/text_chunks
 /*.m4a
 /transcription.txt
 .DS_Store
+/*.txt

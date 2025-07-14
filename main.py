@@ -8,8 +8,9 @@ print(f"cuDNN Version: {torch.backends.cudnn.version()}")
 
 
 def split_audio_ffmpeg(input_audio, chunk_length_sec=30):
-    if not os.path.exists("chunks"):
-        os.makedirs("chunks")
+    audio_dir = "audio_chunks"
+    if not os.path.exists(audio_dir):
+        os.makedirs(audio_dir)
 
     subprocess.run([
         "ffmpeg",
@@ -19,13 +20,13 @@ def split_audio_ffmpeg(input_audio, chunk_length_sec=30):
         "-ar", "16000",
         "-ac", "1",
         "-c:a", "pcm_s16le",
-        "chunks/chunk_%04d.wav",
+        os.path.join(audio_dir, "chunk_%04d.wav"),
         "-y"
-    ])
+    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     chunks = sorted([
-        os.path.join("chunks", file)
-        for file in os.listdir("chunks")
+        os.path.join(audio_dir, file)
+        for file in os.listdir(audio_dir)
         if file.endswith(".wav")
     ])
 
@@ -43,18 +44,24 @@ def transcribe_chunk(model, chunk_path):
 def main(input_audio, output_text):
     model = WhisperModel("large-v3", device="cuda", compute_type="float16")
 
-    chunks = split_audio_ffmpeg(input_audio)
+    audio_chunks = split_audio_ffmpeg(input_audio)
 
-    if not chunks:
+    if not audio_chunks:
         print("No chunks created. Check your input audio and ffmpeg output.")
         return
 
+    text_dir = "text_chunks"
+    if not os.path.exists(text_dir):
+        os.makedirs(text_dir)
+
     transcription_files = []
 
-    for chunk in chunks:
+    for chunk in audio_chunks:
         print(f"Transcribing {chunk}...")
         text = transcribe_chunk(model, chunk)
-        txt_file = chunk.replace(".wav", ".txt")
+        print(f"Transcription completed for {chunk}: {text}\n")
+
+        txt_file = os.path.join(text_dir, os.path.basename(chunk).replace(".wav", ".txt"))
         with open(txt_file, "w", encoding="utf-8") as f:
             f.write(text)
         transcription_files.append(txt_file)
@@ -65,11 +72,6 @@ def main(input_audio, output_text):
                 outfile.write(infile.read() + " ")
 
     print(f"Transcription complete. Result saved to {output_text}")
-
-    # Optional cleanup
-    for file in chunks + transcription_files:
-        os.remove(file)
-    os.rmdir("chunks")
 
 
 if __name__ == "__main__":
