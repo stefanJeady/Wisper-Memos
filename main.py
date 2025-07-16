@@ -5,15 +5,35 @@ import logging
 from faster_whisper import WhisperModel
 import torch
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
 logging.info(f"CUDA Available: {torch.cuda.is_available()}")
 logging.info(f"cuDNN Version: {torch.backends.cudnn.version()}")
 
+BLUE_TEXT = "\033[94m"
+GREEN_TEXT = "\033[92m"
+RESET_TEXT = "\033[0m"
 
-def split_audio_ffmpeg(input_audio, chunk_length_sec=30):
+
+def get_audio_length(input_audio):
+    result = subprocess.run(
+        [
+            "ffprobe",
+            "-v", "error",
+            "-select_streams", "a:0",
+            "-show_entries", "stream=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            input_audio
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True
+    )
+    return float(result.stdout.strip())
+
+
+def split_audio_ffmpeg(input_audio, temp_audio_dir, chunk_length_sec=30):
     audio_chunks = []
-    temp_audio_dir = tempfile.mkdtemp(prefix="audio_chunks_")
 
     subprocess.run([
         "ffmpeg",
@@ -31,7 +51,7 @@ def split_audio_ffmpeg(input_audio, chunk_length_sec=30):
         if file.endswith(".wav"):
             audio_chunks.append(os.path.join(temp_audio_dir, file))
 
-    logging.info(f"Chunks created: {audio_chunks}")
+    logging.info(f"{GREEN_TEXT}Chunks created: {len(audio_chunks)}{RESET_TEXT}")
 
     return audio_chunks
 
@@ -42,33 +62,40 @@ def transcribe_chunk(model, chunk_path):
 
 
 def main(input_audio, output_text):
+    audio_length_sec = get_audio_length(input_audio)
+    logging.info(f"{GREEN_TEXT}Audio length: {audio_length_sec:.2f} seconds. This may take some time. Starting to split audio into chunks for best Whisper performance.{RESET_TEXT}")
+
     model = WhisperModel("large-v3", device="cuda", compute_type="float16")
 
-    audio_chunks = split_audio_ffmpeg(input_audio)
+    with tempfile.TemporaryDirectory(prefix="audio_chunks_") as temp_audio_dir, \
+         tempfile.TemporaryDirectory(prefix="text_chunks_") as temp_text_dir:
 
-    if not audio_chunks:
-        logging.error("No chunks created. Check your input audio and ffmpeg output.")
-        return
+        audio_chunks = split_audio_ffmpeg(input_audio, temp_audio_dir)
 
-    temp_text_dir = tempfile.mkdtemp(prefix="text_chunks_")
-    transcription_files = []
+        if not audio_chunks:
+            logging.error("No chunks created. Check your input audio and ffmpeg output.")
+            return
 
-    for chunk in audio_chunks:
-        logging.info(f"Transcribing {chunk}...")
-        text = transcribe_chunk(model, chunk)
-        logging.info(f"Transcription completed for {chunk}: {text}")
+        transcription_files = []
+        total_chunks = len(audio_chunks)
 
-        txt_file = os.path.join(temp_text_dir, os.path.basename(chunk).replace(".wav", ".txt"))
-        with open(txt_file, "w", encoding="utf-8") as f:
-            f.write(text)
-        transcription_files.append(txt_file)
+        for idx, chunk in enumerate(audio_chunks, 1):
+            logging.info(f"Transcribing {chunk}...")
+            text = transcribe_chunk(model, chunk)
+            logging.info(f"Transcription completed for {chunk}: {BLUE_TEXT}{text}{RESET_TEXT}")
+            logging.info(f"{GREEN_TEXT}Chunk {idx} of {total_chunks} complete{RESET_TEXT}")
 
-    with open(output_text, "w", encoding="utf-8") as outfile:
-        for txt_file in transcription_files:
-            with open(txt_file, "r", encoding="utf-8") as infile:
-                outfile.write(infile.read() + " ")
+            txt_file = os.path.join(temp_text_dir, os.path.basename(chunk).replace(".wav", ".txt"))
+            with open(txt_file, "w", encoding="utf-8") as f:
+                f.write(text)
+            transcription_files.append(txt_file)
 
-    logging.info(f"Transcription complete. Result saved to {output_text}")
+        with open(output_text, "w", encoding="utf-8") as outfile:
+            for txt_file in transcription_files:
+                with open(txt_file, "r", encoding="utf-8") as infile:
+                    outfile.write(infile.read() + " ")
+
+    logging.info(f"{GREEN_TEXT}Transcription complete. Result saved to {output_text}{RESET_TEXT}")
 
 
 if __name__ == "__main__":
