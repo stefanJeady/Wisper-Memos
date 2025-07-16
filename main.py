@@ -1,16 +1,19 @@
 import os
 import subprocess
+import tempfile
+import logging
 from faster_whisper import WhisperModel
 import torch
 
-print(f"CUDA Available: {torch.cuda.is_available()}")
-print(f"cuDNN Version: {torch.backends.cudnn.version()}")
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
+
+logging.info(f"CUDA Available: {torch.cuda.is_available()}")
+logging.info(f"cuDNN Version: {torch.backends.cudnn.version()}")
 
 
 def split_audio_ffmpeg(input_audio, chunk_length_sec=30):
-    audio_dir = "audio_chunks"
-    if not os.path.exists(audio_dir):
-        os.makedirs(audio_dir)
+    audio_chunks = []
+    temp_audio_dir = tempfile.mkdtemp(prefix="audio_chunks_")
 
     subprocess.run([
         "ffmpeg",
@@ -20,25 +23,22 @@ def split_audio_ffmpeg(input_audio, chunk_length_sec=30):
         "-ar", "16000",
         "-ac", "1",
         "-c:a", "pcm_s16le",
-        os.path.join(audio_dir, "chunk_%04d.wav"),
+        os.path.join(temp_audio_dir, "chunk_%04d.wav"),
         "-y"
     ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-    chunks = sorted([
-        os.path.join(audio_dir, file)
-        for file in os.listdir(audio_dir)
-        if file.endswith(".wav")
-    ])
+    for file in sorted(os.listdir(temp_audio_dir)):
+        if file.endswith(".wav"):
+            audio_chunks.append(os.path.join(temp_audio_dir, file))
 
-    print(f"Chunks created: {chunks}")
+    logging.info(f"Chunks created: {audio_chunks}")
 
-    return chunks
+    return audio_chunks
 
 
 def transcribe_chunk(model, chunk_path):
     segments, _ = model.transcribe(chunk_path, beam_size=5, language="en")
-    text = " ".join([segment.text.strip() for segment in segments])
-    return text
+    return " ".join(segment.text.strip() for segment in segments)
 
 
 def main(input_audio, output_text):
@@ -47,21 +47,18 @@ def main(input_audio, output_text):
     audio_chunks = split_audio_ffmpeg(input_audio)
 
     if not audio_chunks:
-        print("No chunks created. Check your input audio and ffmpeg output.")
+        logging.error("No chunks created. Check your input audio and ffmpeg output.")
         return
 
-    text_dir = "text_chunks"
-    if not os.path.exists(text_dir):
-        os.makedirs(text_dir)
-
+    temp_text_dir = tempfile.mkdtemp(prefix="text_chunks_")
     transcription_files = []
 
     for chunk in audio_chunks:
-        print(f"Transcribing {chunk}...")
+        logging.info(f"Transcribing {chunk}...")
         text = transcribe_chunk(model, chunk)
-        print(f"Transcription completed for {chunk}: {text}\n")
+        logging.info(f"Transcription completed for {chunk}: {text}")
 
-        txt_file = os.path.join(text_dir, os.path.basename(chunk).replace(".wav", ".txt"))
+        txt_file = os.path.join(temp_text_dir, os.path.basename(chunk).replace(".wav", ".txt"))
         with open(txt_file, "w", encoding="utf-8") as f:
             f.write(text)
         transcription_files.append(txt_file)
@@ -71,7 +68,7 @@ def main(input_audio, output_text):
             with open(txt_file, "r", encoding="utf-8") as infile:
                 outfile.write(infile.read() + " ")
 
-    print(f"Transcription complete. Result saved to {output_text}")
+    logging.info(f"Transcription complete. Result saved to {output_text}")
 
 
 if __name__ == "__main__":
