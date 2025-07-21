@@ -4,9 +4,13 @@ import tempfile
 import logging
 from faster_whisper import WhisperModel
 import torch
+import platform
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
+is_mac = platform.system() == "Darwin"
+
+logging.info(f"Running on {'Mac (CPU mode)' if is_mac else 'CUDA mode'}")
 logging.info(f"CUDA Available: {torch.cuda.is_available()}")
 logging.info(f"cuDNN Version: {torch.backends.cudnn.version()}")
 
@@ -65,10 +69,13 @@ def main(input_audio, output_text):
     audio_length_sec = get_audio_length(input_audio)
     logging.info(f"{GREEN_TEXT}Audio length: {audio_length_sec:.2f} seconds. This may take some time. Starting to split audio into chunks for best Whisper performance.{RESET_TEXT}")
 
-    model = WhisperModel("large-v3", device="cuda", compute_type="float16")
+    if is_mac:
+        model = WhisperModel("large-v3", device="cpu", compute_type="int8")
+    else:
+        model = WhisperModel("large-v3", device="cuda", compute_type="float16")
 
     with tempfile.TemporaryDirectory(prefix="audio_chunks_") as temp_audio_dir, \
-         tempfile.TemporaryDirectory(prefix="text_chunks_") as temp_text_dir:
+            tempfile.TemporaryDirectory(prefix="text_chunks_") as temp_text_dir:
 
         audio_chunks = split_audio_ffmpeg(input_audio, temp_audio_dir)
 
