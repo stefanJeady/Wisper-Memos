@@ -384,7 +384,7 @@ if __name__ == "__main__":
     
     # Model configuration - modify these settings as needed
     model_size = "large-v3"  # Whisper model size (tiny, base, small, medium, large, large-v2, large-v3)
-    beam_size = 5  # Beam search size for transcription accuracy vs speed
+    beam_size = 20  # Beam search size for transcription accuracy vs speed min 5, max 20 use 15 or more for challenging audio
     language = "en"  # Language code for transcription (en, es, fr, de, etc.)
     
     try:
