@@ -49,16 +49,49 @@ pip install faster_whisper torch
    python main.py
    ```
 
-### Customizing Input/Output
+### Customizing Configuration
 
-Edit the configuration in `main.py`:
+Edit the configuration section in `main.py` to customize all settings:
 
 ```python
 if __name__ == "__main__":
-    input_audio = "your_audio_file.mp3"  # Change this to your audio file
-    output_text = "transcription.txt"    # Change this to your desired output file
-    main(input_audio, output_text)
+    # File paths
+    input_audio = "input.m4a"                    # Path to your audio file
+    output_text = "final_transcription.txt"     # Output transcription file
+    
+    # Model configuration - modify these settings as needed
+    model_size = "large-v3"                     # Whisper model size
+    beam_size = 5                               # Beam search size for accuracy
+    language = "en"                             # Language code for transcription
 ```
+
+#### Available Model Sizes
+
+- `tiny` - Fastest, lowest accuracy (~39 MB)
+- `base` - Good balance of speed and accuracy (~74 MB)
+- `small` - Better accuracy (~244 MB)
+- `medium` - High accuracy (~769 MB)
+- `large`, `large-v2`, `large-v3` - Best accuracy (~1550 MB)
+
+#### Language Codes
+
+Common language codes include:
+
+- `en` - English
+- `es` - Spanish
+- `fr` - French
+- `de` - German
+- `it` - Italian
+- `pt` - Portuguese
+- `zh` - Chinese
+- `ja` - Japanese
+- `ko` - Korean
+
+#### Beam Size Settings
+
+- `1` - Fastest transcription, lower accuracy
+- `5` - Balanced accuracy and speed (recommended)
+- `10` - Higher accuracy, slower processing
 
 ### Supported Audio Formats
 
@@ -69,12 +102,26 @@ if __name__ == "__main__":
 
 1. **Audio Analysis** - The tool first analyzes the input audio to determine its duration
 2. **Platform Detection** - Automatically detects if running on Mac (CPU mode) or other platforms (CUDA mode)
-3. **Model Loading** - Loads the appropriate Whisper large-v3 model configuration
+3. **Model Loading** - Loads the configured Whisper model with your specified settings (displays actual model size, device, compute type, beam size, and language)
 4. **Audio Chunking** - Splits the audio into 30-second chunks for optimal processing
-5. **Transcription** - Each chunk is transcribed using beam search (beam_size=5)
+5. **Transcription** - Each chunk is transcribed using your configured beam search and language settings
 6. **Assembly** - All transcriptions are combined into a single output file
 
 ## Configuration Options
+
+### Model Configuration
+
+All model settings are now centralized in the main configuration section at the bottom of `main.py`. You can easily modify:
+
+- **Model Size**: Choose from tiny, base, small, medium, large, large-v2, or large-v3
+- **Beam Size**: Adjust transcription accuracy vs speed (1-10, recommended: 5)
+- **Language**: Set the target language code for transcription
+- **File Paths**: Configure input audio and output text file locations
+
+### Platform-Specific Settings
+
+- **Mac**: Automatically uses CPU with int8 compute type for compatibility
+- **Other platforms**: Uses CUDA with float16 for better performance (if CUDA is available)
 
 ### Chunk Length
 
@@ -84,11 +131,6 @@ You can modify the chunk length in the `split_audio_ffmpeg` function:
 # Default is 30 seconds, you can change this value
 audio_chunks = split_audio_ffmpeg(input_audio, temp_audio_dir, chunk_length_sec=30)
 ```
-
-### Model Settings
-
-- **Mac**: Uses CPU with int8 compute type for compatibility
-- **Other platforms**: Uses CUDA with float16 for better performance (if CUDA is available)
 
 ## Performance Notes
 

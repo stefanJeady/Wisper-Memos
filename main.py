@@ -90,17 +90,17 @@ def print_progress_bar(current, total, prefix="Progress", bar_length=40):
     bar = f"{Colors.GREEN}{'█' * filled_length}{Colors.RESET}"
     bar += f"{Colors.DIM}{'░' * (bar_length - filled_length)}{Colors.RESET}"
     
-    # Move up 4 lines to position above chunk status, clear and write progress
-    sys.stdout.write(f"\033[4A")  # Move up 4 lines
+    # Move up 2 lines to position above chunk status, clear and write progress
+    sys.stdout.write(f"\033[2A")  # Move up 2 lines (reduced from 3)
     sys.stdout.write(f"\r{' ' * 100}\r")  # Clear line
     sys.stdout.write(f"{Colors.BOLD}{prefix}:{Colors.RESET} [{bar}] {Colors.GREEN}{percent:.1%}{Colors.RESET} ({current}/{total})")
-    sys.stdout.write(f"\033[4B")  # Move back down 4 lines
+    sys.stdout.write(f"\033[2B")  # Move back down 2 lines (reduced from 3)
     sys.stdout.flush()
     
     if current == total:
-        sys.stdout.write(f"\033[4A")  # Move up to progress line
+        sys.stdout.write(f"\033[2A")  # Move up to progress line (reduced from 3)
         sys.stdout.write(f"\r{Colors.BOLD}{prefix}:{Colors.RESET} [{bar}] {Colors.GREEN}{percent:.1%}{Colors.RESET} ({current}/{total}) {Colors.GREEN}COMPLETE{Colors.RESET}")
-        sys.stdout.write(f"\033[4B")  # Move back down
+        sys.stdout.write(f"\033[2B")  # Move back down (reduced from 3)
         sys.stdout.flush()
 
 
@@ -110,15 +110,11 @@ def print_chunk_status_inline(chunk_idx, total_chunks, chunk_name, text_preview)
     preview = text_preview[:60] + "..." if len(text_preview) > 60 else text_preview
     
     # Move to line 2 (chunk info), clear and write
-    sys.stdout.write(f"\033[2A")  # Move up 2 lines
+    sys.stdout.write(f"\033[1A")  # Move up 1 line (reduced from 2)
     sys.stdout.write(f"\r{' ' * 100}\r")  # Clear line
     sys.stdout.write(f"{Colors.BOLD}Processing Chunk {chunk_idx}/{total_chunks}{Colors.RESET}")
     
-    # Move to line 3 (filename), clear and write
-    sys.stdout.write(f"\033[1B\r{' ' * 100}\r")  # Move down 1, clear line
-    sys.stdout.write(f"{Colors.DIM}File: {chunk_name}{Colors.RESET}")
-    
-    # Move to line 4 (transcription), clear and write
+    # Move to line 3 (transcription), clear and write
     sys.stdout.write(f"\033[1B\r{' ' * 100}\r")  # Move down 1, clear line
     sys.stdout.write(f"{Colors.GREEN}Text: \"{preview}\"{Colors.RESET}")
     
@@ -260,9 +256,9 @@ def has_spoken_content(text):
     return len(cleaned_text) >= 10
 
 
-def transcribe_chunk_with_live_update(model, chunk_path, chunk_idx, total_chunks, chunk_name):
+def transcribe_chunk_with_live_update(model, chunk_path, chunk_idx, total_chunks, chunk_name, beam_size=5, language="en"):
     """Transcribe a single audio chunk with live text updates, skipping empty chunks."""
-    segments, _ = model.transcribe(chunk_path, beam_size=5, language="en")
+    segments, _ = model.transcribe(chunk_path, beam_size=beam_size, language=language)
     
     # Build text progressively and update display
     full_text = ""
@@ -287,7 +283,7 @@ def transcribe_chunk_with_live_update(model, chunk_path, chunk_idx, total_chunks
     return final_text
 
 
-def main(input_audio, output_text):
+def main(input_audio, output_text, model_size="large-v3", beam_size=5, language="en"):
     """Main function to transcribe audio file to text using chunked processing."""
     
     # Print sexy startup banner
@@ -303,13 +299,18 @@ def main(input_audio, output_text):
     print_audio_info(audio_length_sec)
 
     print_section_header("Model Loading")
-    print(f"{Colors.YELLOW}Loading Whisper AI model...{Colors.RESET}")
     
     if is_mac:
-        model = WhisperModel("large-v3", device="cpu", compute_type="int8")
+        device = "cpu"
+        compute_type = "int8"
+        print(f"{Colors.YELLOW}Loading Whisper AI model ({model_size}, {device}, {compute_type}, beam_size={beam_size}, language={language})...{Colors.RESET}")
+        model = WhisperModel(model_size, device=device, compute_type=compute_type)
         print(f"{Colors.GREEN}Model loaded on CPU (Mac optimized){Colors.RESET}")
     else:
-        model = WhisperModel("large-v3", device="cuda", compute_type="float16")
+        device = "cuda"
+        compute_type = "float16"
+        print(f"{Colors.YELLOW}Loading Whisper AI model ({model_size}, {device}, {compute_type}, beam_size={beam_size}, language={language})...{Colors.RESET}")
+        model = WhisperModel(model_size, device=device, compute_type=compute_type)
         print(f"{Colors.GREEN}Model loaded on CUDA (GPU accelerated){Colors.RESET}")
 
     with tempfile.TemporaryDirectory(prefix="audio_chunks_") as temp_audio_dir, \
@@ -325,33 +326,27 @@ def main(input_audio, output_text):
         transcription_files = []
         total_chunks = len(audio_chunks)
         skipped_chunks = 0
-        last_text = "Ready to start transcription..."  # Keep track of last displayed text
         
         # Create space for the display
         print()  # Space for progress bar
         print()  # Space for chunk info
-        print()  # Space for filename
         print()  # Space for transcription text
 
         for idx, chunk in enumerate(audio_chunks, 1):
-            # Show current chunk info with last text until new transcription is ready
+            # Show current chunk info
             chunk_name = os.path.basename(chunk)
-            print_chunk_status_inline(idx, total_chunks, chunk_name, last_text)
             
             # Update progress bar AFTER chunk status (so it shows above)
             print_progress_bar(idx - 1, total_chunks, "Overall Progress")
             
             # Process chunk with live text updates
-            text = transcribe_chunk_with_live_update(model, chunk, idx, total_chunks, chunk_name)
+            text = transcribe_chunk_with_live_update(model, chunk, idx, total_chunks, chunk_name, beam_size, language)
             
             # Skip chunks with no spoken content
             if text is None:
                 skipped_chunks += 1
-                last_text = f"SKIPPED: No meaningful content in chunk {idx}"
                 continue
             
-            last_text = f"DONE: {text[:80]}{'...' if len(text) > 80 else ''}"  # Update last_text
-
             txt_file = os.path.join(temp_text_dir, os.path.basename(chunk).replace(".wav", ".txt"))
             with open(txt_file, "w", encoding="utf-8") as f:
                 f.write(text)
@@ -387,9 +382,14 @@ if __name__ == "__main__":
     input_audio = "input.m4a"  # Path to the audio file to transcribe
     output_text = "final_transcription.txt"  # Path where transcription will be saved
     
+    # Model configuration - modify these settings as needed
+    model_size = "large-v3"  # Whisper model size (tiny, base, small, medium, large, large-v2, large-v3)
+    beam_size = 5  # Beam search size for transcription accuracy vs speed
+    language = "en"  # Language code for transcription (en, es, fr, de, etc.)
+    
     try:
         # Start the transcription process
-        main(input_audio, output_text)
+        main(input_audio, output_text, model_size, beam_size, language)
     except KeyboardInterrupt:
         # Handle Ctrl+C gracefully
         print(f"\n\n{Colors.YELLOW}{Colors.BOLD}TRANSCRIPTION INTERRUPTED{Colors.RESET}")
