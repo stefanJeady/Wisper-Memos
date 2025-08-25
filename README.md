@@ -92,11 +92,15 @@ Common language codes include:
 - `1` - Fastest transcription, lower accuracy
 - `5` - Balanced accuracy and speed (recommended)
 - `10` - Higher accuracy, slower processing
+- `20` - Required for Challenging files, extremely slow, best accuracy
 
 ### Supported Audio Formats
 
 - MP3, M4A, WAV, FLAC, OGG
 - Any format supported by FFmpeg
+- **Transcribing Apple Voice Memos (M4A files):**  
+    To transcribe Apple Voice Memos, open the Voice Memos app on your Mac, then drag your desired recording from the Voice Memos sidebar directly into the root folder of this project.
+    Rename the file to `input.m4a` before running the transcription tool. This ensures seamless transcription of your Apple Voice Memo audio files to text.
 
 ## How It Works
 
