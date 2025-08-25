@@ -52,7 +52,7 @@ def print_banner():
     banner = f"""
 {Colors.CYAN}{Colors.BOLD}
 ╔══════════════════════════════════════════════════════════════╗
-║                    WHISPER TRANSCRIPTION                     ║
+║                          WHISPER Memos                       ║
 ║                     AI-Powered Audio Magic                   ║
 ╚══════════════════════════════════════════════════════════════╝
 {Colors.RESET}
