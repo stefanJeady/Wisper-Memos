@@ -318,7 +318,7 @@ def main(input_audio, output_text):
         audio_chunks = split_audio_ffmpeg(input_audio, temp_audio_dir)
 
         if not audio_chunks:
-            print(f"{Colors.RED}❌ No chunks created. Check your input audio and ffmpeg output.{Colors.RESET}")
+            print(f"{Colors.RED} No chunks created. Check your input audio and ffmpeg output.{Colors.RESET}")
             return
 
         print_section_header("Transcription Processing")
