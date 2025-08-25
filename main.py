@@ -1,3 +1,5 @@
+"""Audio Transcription Tool using Faster Whisper - See README.md for full documentation."""
+
 import os
 import subprocess
 import tempfile
@@ -6,37 +8,62 @@ from faster_whisper import WhisperModel
 import torch
 import platform
 
+# Configure logging format for clear output tracking
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
+# Platform detection for model configuration
 is_mac = platform.system() == "Darwin"
 
+# Log system information for debugging
 logging.info(f"Running on {'Mac (CPU mode)' if is_mac else 'CUDA mode'}")
 logging.info(f"CUDA Available: {torch.cuda.is_available()}")
 logging.info(f"cuDNN Version: {torch.backends.cudnn.version()}")
 
+# ANSI color codes for enhanced terminal output
 BLUE_TEXT = "\033[94m"
 GREEN_TEXT = "\033[92m"
 RESET_TEXT = "\033[0m"
 
 
 def get_audio_length(input_audio):
-    result = subprocess.run(
-        [
-            "ffprobe",
-            "-v", "error",
-            "-select_streams", "a:0",
-            "-show_entries", "stream=duration",
-            "-of", "default=noprint_wrappers=1:nokey=1",
-            input_audio
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True
-    )
-    return float(result.stdout.strip())
+    """Get audio duration in seconds using FFprobe."""
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v", "error",
+                "-select_streams", "a:0",
+                "-show_entries", "stream=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                input_audio
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True
+        )
+        
+        # Check if we got valid output
+        duration_str = result.stdout.strip()
+        if not duration_str:
+            raise ValueError(f"FFprobe returned empty duration for file: {input_audio}")
+        
+        return float(duration_str)
+        
+    except subprocess.CalledProcessError as e:
+        error_msg = e.stderr.strip() if e.stderr else "Unknown FFmpeg error"
+        raise RuntimeError(f"FFmpeg failed: {error_msg}. Make sure FFmpeg is installed and the audio file exists.")
+    except FileNotFoundError:
+        raise RuntimeError("FFmpeg not found. Please install FFmpeg and ensure it's in your PATH.")
+    except ValueError as e:
+        if "could not convert string to float" in str(e):
+            raise ValueError(f"Invalid duration format from FFmpeg for file: {input_audio}")
+        else:
+            raise
 
 
 def split_audio_ffmpeg(input_audio, temp_audio_dir, chunk_length_sec=30):
+    """Split audio into chunks using FFmpeg for optimal Whisper processing."""
     audio_chunks = []
 
     subprocess.run([
@@ -61,11 +88,18 @@ def split_audio_ffmpeg(input_audio, temp_audio_dir, chunk_length_sec=30):
 
 
 def transcribe_chunk(model, chunk_path):
+    """Transcribe a single audio chunk using Whisper with beam search."""
     segments, _ = model.transcribe(chunk_path, beam_size=5, language="en")
     return " ".join(segment.text.strip() for segment in segments)
 
 
 def main(input_audio, output_text):
+    """Main function to transcribe audio file to text using chunked processing."""
+    
+    # Check if input file exists
+    if not os.path.exists(input_audio):
+        raise FileNotFoundError(f"Input audio file not found: {input_audio}")
+    
     audio_length_sec = get_audio_length(input_audio)
     logging.info(f"{GREEN_TEXT}Audio length: {audio_length_sec:.2f} seconds. This may take some time. Starting to split audio into chunks for best Whisper performance.{RESET_TEXT}")
 
@@ -106,6 +140,18 @@ def main(input_audio, output_text):
 
 
 if __name__ == "__main__":
-    input_audio = "input.m4a"
-    output_text = "final_transcription.txt"
-    main(input_audio, output_text)
+    # Configuration for the transcription process
+    # These paths can be modified to match your specific files
+    input_audio = "input.m4a"  # Path to the audio file to transcribe
+    output_text = "final_transcription.txt"  # Path where transcription will be saved
+    
+    try:
+        # Start the transcription process
+        main(input_audio, output_text)
+    except Exception as e:
+        logging.error(f"Error during transcription: {e}")
+        print(f"\n{BLUE_TEXT}Please ensure:{RESET_TEXT}")
+        print(f"1. Your audio file '{input_audio}' exists in the current directory")
+        print(f"2. FFmpeg is installed and available in your PATH")
+        print(f"3. The audio file format is supported by FFmpeg")
+        exit(1)
