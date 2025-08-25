@@ -67,14 +67,24 @@ def print_system_info():
     
     platform_info = "Mac (CPU mode)" if is_mac else "Windows/Linux (CUDA mode)"
     
-    # Check CTranslate2 CUDA instead of PyTorch CUDA
+    # Check CUDA availability without creating a model
     try:
-        from faster_whisper import WhisperModel
-        # Try to create a small model on CUDA
-        test_model = WhisperModel("tiny", device="cuda")
-        cuda_status = "Available (CTranslate2)"
+        import torch
+        if torch.cuda.is_available():
+            cuda_status = "Available (CTranslate2)"
+        else:
+            cuda_status = "Not Available"
     except:
-        cuda_status = "Not Available"
+        # Fallback check - try to import ctranslate2 directly
+        try:
+            import ctranslate2
+            # Check if CUDA devices are available through ctranslate2
+            if hasattr(ctranslate2, 'get_cuda_device_count') and ctranslate2.get_cuda_device_count() > 0:
+                cuda_status = "Available (CTranslate2)"
+            else:
+                cuda_status = "Not Available"
+        except:
+            cuda_status = "Not Available"
     
     print(f"{Colors.CYAN}Platform:{Colors.RESET} {platform_info}")
     print(f"{Colors.CYAN}CUDA:{Colors.RESET} {cuda_status}")
@@ -300,6 +310,22 @@ def main(input_audio, output_text, model_size="large-v3", beam_size=5, language=
 
     print_section_header("Model Loading")
     
+    # Warning for low beam size
+    if beam_size < 15:
+        print(f"{Colors.RED}{Colors.BOLD}LOW QUALITY BEAM SIZE WARNING{Colors.RESET}")
+        print(f"{Colors.YELLOW}Beam size of {beam_size} is quite low. For better transcription quality,{Colors.RESET}")
+        print(f"{Colors.YELLOW}consider using beam_size=15 or higher, especially for challenging audio.{Colors.RESET}")
+        print(f"{Colors.CYAN}Current setting may result in lower accuracy transcriptions.{Colors.RESET}")
+        print()
+    
+    # Warning for high beam size
+    if beam_size > 20:
+        print(f"{Colors.RED}{Colors.BOLD}HIGH BEAM SIZE WARNING{Colors.RESET}")
+        print(f"{Colors.YELLOW}Beam size of {beam_size} is very high. Values above 20 have{Colors.RESET}")
+        print(f"{Colors.YELLOW}diminishing returns and will slow processing drastically.{Colors.RESET}")
+        print(f"{Colors.CYAN}Consider using beam_size=15-20 for optimal balance of quality and speed.{Colors.RESET}")
+        print()
+    
     if is_mac:
         device = "cpu"
         compute_type = "int8"
@@ -337,7 +363,7 @@ def main(input_audio, output_text, model_size="large-v3", beam_size=5, language=
             chunk_name = os.path.basename(chunk)
             
             # Update progress bar AFTER chunk status (so it shows above)
-            print_progress_bar(idx - 1, total_chunks, "Overall Progress")
+            print_progress_bar(idx, total_chunks, "Overall Progress")
             
             # Process chunk with live text updates
             text = transcribe_chunk_with_live_update(model, chunk, idx, total_chunks, chunk_name, beam_size, language)
@@ -352,9 +378,8 @@ def main(input_audio, output_text, model_size="large-v3", beam_size=5, language=
                 f.write(text)
             transcription_files.append(txt_file)
 
-        # Final progress bar completion
+        # Clear the progress display and move to next section
         print()  # New line after the last chunk status
-        print_progress_bar(total_chunks, total_chunks, "Overall Progress")
         
         # Show processing statistics
         processed_chunks = len(transcription_files)
@@ -384,7 +409,7 @@ if __name__ == "__main__":
     
     # Model configuration - modify these settings as needed
     model_size = "large-v3"  # Whisper model size (tiny, base, small, medium, large, large-v2, large-v3)
-    beam_size = 20  # Beam search size for transcription accuracy vs speed min 5, max 20 use 15 or more for challenging audio
+    beam_size = 20 # Beam search size for transcription accuracy vs speed min 5, max 20 use 15 or more for challenging audio
     language = "en"  # Language code for transcription (en, es, fr, de, etc.)
     
     try:
