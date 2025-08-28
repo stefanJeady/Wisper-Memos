@@ -6,6 +6,7 @@ import tempfile
 import logging
 import time
 import sys
+import yaml
 from faster_whisper import WhisperModel
 import torch
 import platform
@@ -45,6 +46,44 @@ class Colors:
     
     # Special effects
     RAINBOW = [RED, YELLOW, GREEN, CYAN, BLUE, MAGENTA]
+
+
+def load_config(config_path="config.yaml"):
+    """Load configuration from YAML file"""
+    try:
+        with open(config_path, 'r', encoding='utf-8') as file:
+            return yaml.safe_load(file)
+    except FileNotFoundError:
+        print(f"{Colors.RED}Configuration file '{config_path}' not found. Using default settings.{Colors.RESET}")
+        return get_default_config()
+    except yaml.YAMLError as e:
+        print(f"{Colors.RED}Error parsing YAML configuration: {e}. Using default settings.{Colors.RESET}")
+        return get_default_config()
+
+def get_default_config():
+    """Return default configuration if YAML file is not available"""
+    return {
+        'whisper': {
+            'input_audio': 'input.m4a',
+            'output_text': 'final_transcription.txt',
+            'model_size': 'large-v3',
+            'beam_size': 20,
+            'language': 'en',
+            'include_timestamps': True,
+            'chunk_length_sec': 30,
+            'mac': {
+                'device': 'cpu',
+                'compute_type': 'int8'
+            },
+            'other': {
+                'device': 'cuda',
+                'compute_type': 'float16'
+            }
+        },
+        'output': {
+            'encoding': 'utf-8'
+        }
+    }
 
 
 def print_banner():
@@ -162,6 +201,49 @@ TRANSCRIPTION COMPLETE!
     print(completion_banner)
 
 
+def run_deepseek_analysis(config):
+    """Run DeepSeek analysis automatically after successful transcription."""
+    workflow_config = config.get('workflow', {})
+    analysis_script = workflow_config.get('analysis_script', 'deepseek_analysis.py')
+    analysis_delay = workflow_config.get('analysis_delay', 2)
+    
+    print_section_header("Auto-Analysis")
+    print(f"{Colors.CYAN}Starting automated DeepSeek analysis...{Colors.RESET}")
+    
+    # Optional delay to allow file system to sync
+    if analysis_delay > 0:
+        print(f"{Colors.DIM}Waiting {analysis_delay} seconds for file sync...{Colors.RESET}")
+        time.sleep(analysis_delay)
+    
+    try:
+        # Check if analysis script exists
+        if not os.path.exists(analysis_script):
+            print(f"{Colors.RED}Analysis script not found: {analysis_script}{Colors.RESET}")
+            return
+        
+        print(f"{Colors.YELLOW}Running: python {analysis_script}{Colors.RESET}")
+        print(f"{Colors.DIM}This may take several minutes depending on transcription length...{Colors.RESET}")
+        print()
+        
+        # Run the analysis script
+        result = subprocess.run(
+            [sys.executable, analysis_script],
+            capture_output=False,  # Allow real-time output
+            text=True
+        )
+        
+        if result.returncode == 0:
+            print(f"\n{Colors.GREEN}{Colors.BOLD}ANALYSIS COMPLETE!{Colors.RESET}")
+            print(f"{Colors.CYAN}DeepSeek analysis finished successfully{Colors.RESET}")
+        else:
+            print(f"\n{Colors.RED}Analysis script exited with error code: {result.returncode}{Colors.RESET}")
+            
+    except subprocess.CalledProcessError as e:
+        print(f"{Colors.RED}Error running analysis: {e}{Colors.RESET}")
+    except Exception as e:
+        print(f"{Colors.RED}Unexpected error during analysis: {e}{Colors.RESET}")
+
+
 def get_audio_length(input_audio):
     """Get audio duration in seconds using FFprobe."""
     try:
@@ -231,7 +313,17 @@ def split_audio_ffmpeg(input_audio, temp_audio_dir, chunk_length_sec=30):
 
     print(f"{Colors.GREEN}Created {Colors.BOLD}{len(audio_chunks)}{Colors.RESET}{Colors.GREEN} audio chunks for processing{Colors.RESET}")
 
-    return audio_chunks
+    # Calculate actual chunk durations for accurate timestamps
+    chunk_durations = []
+    for chunk_path in audio_chunks:
+        try:
+            duration = get_audio_length(chunk_path)
+            chunk_durations.append(duration)
+        except:
+            # Fallback to the target chunk length if we can't get the actual duration
+            chunk_durations.append(chunk_length_sec)
+
+    return audio_chunks, chunk_durations
 
 
 def has_spoken_content(text):
@@ -293,8 +385,22 @@ def transcribe_chunk_with_live_update(model, chunk_path, chunk_idx, total_chunks
     return final_text
 
 
-def main(input_audio, output_text, model_size="large-v3", beam_size=5, language="en"):
+def main(config=None):
     """Main function to transcribe audio file to text using chunked processing."""
+    
+    # Load configuration
+    if config is None:
+        config = load_config()
+    
+    # Extract settings from config
+    whisper_config = config['whisper']
+    input_audio = whisper_config['input_audio']
+    output_text = whisper_config['output_text']
+    model_size = whisper_config['model_size']
+    beam_size = whisper_config['beam_size']
+    language = whisper_config['language']
+    include_timestamps = whisper_config['include_timestamps']
+    chunk_length_sec = whisper_config['chunk_length_sec']
     
     # Print sexy startup banner
     print_banner()
@@ -327,14 +433,14 @@ def main(input_audio, output_text, model_size="large-v3", beam_size=5, language=
         print()
     
     if is_mac:
-        device = "cpu"
-        compute_type = "int8"
+        device = whisper_config['mac']['device']
+        compute_type = whisper_config['mac']['compute_type']
         print(f"{Colors.YELLOW}Loading Whisper AI model ({model_size}, {device}, {compute_type}, beam_size={beam_size}, language={language})...{Colors.RESET}")
         model = WhisperModel(model_size, device=device, compute_type=compute_type)
         print(f"{Colors.GREEN}Model loaded on CPU (Mac optimized){Colors.RESET}")
     else:
-        device = "cuda"
-        compute_type = "float16"
+        device = whisper_config['other']['device']
+        compute_type = whisper_config['other']['compute_type']
         print(f"{Colors.YELLOW}Loading Whisper AI model ({model_size}, {device}, {compute_type}, beam_size={beam_size}, language={language})...{Colors.RESET}")
         model = WhisperModel(model_size, device=device, compute_type=compute_type)
         print(f"{Colors.GREEN}Model loaded on CUDA (GPU accelerated){Colors.RESET}")
@@ -342,7 +448,7 @@ def main(input_audio, output_text, model_size="large-v3", beam_size=5, language=
     with tempfile.TemporaryDirectory(prefix="audio_chunks_") as temp_audio_dir, \
             tempfile.TemporaryDirectory(prefix="text_chunks_") as temp_text_dir:
 
-        audio_chunks = split_audio_ffmpeg(input_audio, temp_audio_dir)
+        audio_chunks, chunk_durations = split_audio_ffmpeg(input_audio, temp_audio_dir, chunk_length_sec)
 
         if not audio_chunks:
             print(f"{Colors.RED} No chunks created. Check your input audio and ffmpeg output.{Colors.RESET}")
@@ -362,6 +468,9 @@ def main(input_audio, output_text, model_size="large-v3", beam_size=5, language=
             # Show current chunk info
             chunk_name = os.path.basename(chunk)
             
+            # Calculate timestamp for this chunk using actual chunk durations
+            chunk_start_time_sec = sum(chunk_durations[:idx-1])  # Sum of all previous chunks
+            
             # Update progress bar AFTER chunk status (so it shows above)
             print_progress_bar(idx, total_chunks, "Overall Progress")
             
@@ -372,6 +481,20 @@ def main(input_audio, output_text, model_size="large-v3", beam_size=5, language=
             if text is None:
                 skipped_chunks += 1
                 continue
+            
+            # Add timestamp to text if enabled
+            if include_timestamps:
+                # Format timestamp as [MM:SS] or [HH:MM:SS] for longer audio
+                minutes = int(chunk_start_time_sec // 60)
+                seconds = int(chunk_start_time_sec % 60)
+                if minutes >= 60:
+                    hours = int(minutes // 60)
+                    minutes = int(minutes % 60)
+                    timestamp = f"[{hours:02d}:{minutes:02d}:{seconds:02d}]"
+                else:
+                    timestamp = f"[{minutes:02d}:{seconds:02d}]"
+                
+                text = f"{timestamp} {text}"
             
             txt_file = os.path.join(temp_text_dir, os.path.basename(chunk).replace(".wav", ".txt"))
             with open(txt_file, "w", encoding="utf-8") as f:
@@ -391,30 +514,32 @@ def main(input_audio, output_text, model_size="large-v3", beam_size=5, language=
         print_section_header("Final Assembly")
         print(f"{Colors.YELLOW}Combining {processed_chunks} transcription chunks...{Colors.RESET}")
         
-        with open(output_text, "w", encoding="utf-8") as outfile:
+        with open(output_text, "w", encoding=config['output']['encoding']) as outfile:
             for txt_file in transcription_files:
-                with open(txt_file, "r", encoding="utf-8") as infile:
+                with open(txt_file, "r", encoding=config['output']['encoding']) as infile:
                     content = infile.read().strip()
                     if content:  # Only write non-empty content
-                        outfile.write(content + " ")
+                        if include_timestamps:
+                            # Add each chunk on a new line when timestamps are included for better readability
+                            outfile.write(content + "\n\n")
+                        else:
+                            # Original behavior: concatenate with spaces
+                            outfile.write(content + " ")
 
     print_completion_message(output_text)
+    
+    # Workflow automation: Auto-run DeepSeek analysis if enabled
+    if config.get('workflow', {}).get('auto_run_analysis', False):
+        run_deepseek_analysis(config)
 
 
 if __name__ == "__main__":
-    # Configuration for the transcription process
-    # These paths can be modified to match your specific files
-    input_audio = "input.m4a"  # Path to the audio file to transcribe
-    output_text = "final_transcription.txt"  # Path where transcription will be saved
-    
-    # Model configuration - modify these settings as needed
-    model_size = "large-v3"  # Whisper model size (tiny, base, small, medium, large, large-v2, large-v3)
-    beam_size = 20 # Beam search size for transcription accuracy vs speed min 5, max 20 use 15 or more for challenging audio
-    language = "en"  # Language code for transcription (en, es, fr, de, etc.)
+    # Load configuration from YAML file
+    config = load_config()
     
     try:
-        # Start the transcription process
-        main(input_audio, output_text, model_size, beam_size, language)
+        # Start the transcription process using configuration settings
+        main(config)
     except KeyboardInterrupt:
         # Handle Ctrl+C gracefully
         print(f"\n\n{Colors.YELLOW}{Colors.BOLD}TRANSCRIPTION INTERRUPTED{Colors.RESET}")
@@ -425,9 +550,11 @@ if __name__ == "__main__":
         print(f"\n{Colors.RED}{Colors.BOLD}ERROR DURING TRANSCRIPTION{Colors.RESET}")
         print(f"{Colors.RED}Error: {e}{Colors.RESET}")
         print(f"\n{Colors.BLUE}{Colors.BOLD}Please ensure:{Colors.RESET}")
-        print(f"{Colors.CYAN}1. Your audio file '{input_audio}' exists in the current directory{Colors.RESET}")
+        print(f"{Colors.CYAN}1. Your audio file exists in the current directory{Colors.RESET}")
         print(f"{Colors.CYAN}2. FFmpeg is installed and available in your PATH{Colors.RESET}")
         print(f"{Colors.CYAN}3. The audio file format is supported by FFmpeg{Colors.RESET}")
         print(f"{Colors.CYAN}4. You have sufficient disk space for temporary files{Colors.RESET}")
+        print(f"{Colors.CYAN}5. The config.yaml file is properly formatted{Colors.RESET}")
         print(f"\n{Colors.YELLOW}For troubleshooting, check that all dependencies are installed{Colors.RESET}")
+        print(f"{Colors.YELLOW}and verify your configuration in config.yaml{Colors.RESET}")
         exit(1)

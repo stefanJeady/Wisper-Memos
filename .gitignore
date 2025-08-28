@@ -4,3 +4,12 @@
 /transcription.txt
 .DS_Store
 /*.txt
+
+# DeepSeek Analysis Output Files
+deepseek_analysis_*.md
+enhance_*.txt
+summary_*.txt
+analyze_*.txt
+format_*.txt
+__pycache__
+/*.bak

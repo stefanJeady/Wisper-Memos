@@ -1,0 +1,55 @@
+Prompt for DeepSeek R1
+
+You are an expert meeting analyst. Your task is to analyze the following transcript comprehensively and provide a structured, professional output.
+
+Instructions
+
+Read the transcript in detail and extract information into the following sections:
+
+Meeting Summary
+
+A concise yet thorough overview of the main discussions and outcomes.
+
+Key Topics Discussed
+
+List all main topics.
+
+Add a brief description of what was covered under each.
+
+Participants
+
+Identify all speakers.
+
+Include their names and roles, if determinable from the transcript.
+
+If role is unclear, mark as “Unknown.”
+
+Action Items
+
+Extract every task, decision, or follow-up.
+
+Format each as a clear, actionable statement.
+
+Assign responsibility if mentioned; otherwise mark as “Unassigned.”
+
+Include any deadlines.
+
+Important Dates/Times
+
+List all significant dates, deadlines, or scheduled events mentioned.
+
+Provide context (e.g., project milestone, delivery date, next meeting).
+
+Tone and Context
+
+Assess the atmosphere of the meeting (e.g., collaborative, tense, rushed, optimistic).
+
+Note relevant contextual cues (e.g., urgency, conflict, alignment).
+
+Recommendations
+
+Provide professional suggestions for follow-up actions, communication improvements, or process enhancements based on the transcript.
+
+Output Format
+
+Use clear section headers. Within each section, use numbered or bulleted lists where appropriate for readability. Ensure nothing is omitted.

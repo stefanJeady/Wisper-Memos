@@ -1,0 +1,60 @@
+# Wisper-Consulting Configuration File
+# This file contains all configurable settings for both the transcription and analysis tools
+
+# Whisper Transcription Settings
+whisper:
+  # File paths
+  input_audio: "input.m4a"                    # Path to the audio file to transcribe
+  output_text: "final_transcription.txt"     # Path where transcription will be saved
+  
+  # Model configuration
+  model_size: "large-v3"                     # Whisper model size (tiny, base, small, medium, large, large-v2, large-v3)
+  beam_size: 20                              # Beam search size for transcription accuracy vs speed (min 5, max 20, use 15+ for challenging audio)
+  language: "en"                             # Language code for transcription (en, es, fr, de, etc.)
+  
+  # Processing settings
+  include_timestamps: true                   # Set to true to include timestamps at the start of each chunk
+  chunk_length_sec: 30                       # Length of each audio chunk in seconds (affects timestamp precision)
+  
+  # Platform-specific settings (auto-detected)
+  mac:
+    device: "cpu"
+    compute_type: "int8"
+  other:
+    device: "cuda"
+    compute_type: "float16"
+
+# DeepSeek R1 Analysis Settings
+deepseek:
+  # Ollama configuration
+  ollama_url: "http://localhost:11434"       # Ollama server URL
+  model_name: "deepseek-r1:latest"           # DeepSeek model name
+  
+  # Analysis settings
+  timeout: 1200                             # Request timeout in seconds (20 minutes)
+
+  # Generation parameters
+  generation:
+    temperature: 0.7                        # Creativity/randomness (0.5-0.7 recommended by DeepSeek, 0.6 is optimal)
+    top_p: 0.1                              # Nucleus sampling (0.0-1.0, controls diversity)
+    max_tokens: 32000                        # Maximum response length max 32,000 recommended 8,000 
+    stream: true                            # Stream response (true/false) (Show working output)
+    request_timeout: 1200                   # Individual request timeout in seconds
+  
+  # Prompts folder
+  prompts_folder: "prompts"                  # Folder containing analysis prompts
+
+# Output Settings
+output:
+  # Analysis output format
+  timestamp_format: "%Y%m%d_%H%M%S"         # Format for output file timestamps
+  encoding: "utf-8"                         # File encoding for all text outputs
+
+# Workflow Automation Settings
+workflow:
+  # Auto-run DeepSeek analysis after successful transcription
+  auto_run_analysis: true                   # Set to true to automatically run DeepSeek analysis after main.py completes successfully
+  analysis_script: "deepseek_analysis.py"  # Path to the analysis script to run
+  
+  # Optional: Delay before starting analysis (in seconds)
+  analysis_delay: 2                         # Wait time before starting analysis (allows file system to sync)

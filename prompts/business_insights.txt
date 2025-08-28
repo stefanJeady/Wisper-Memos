@@ -1,0 +1,61 @@
+Prompt for DeepSeek R1
+
+You are an expert business analyst. Your task is to carefully read the following meeting transcript and extract all relevant business insights into the specified categories.
+
+Instructions
+
+Go through the transcript thoroughly.
+
+Identify and extract insights under these seven categories:
+
+Business Opportunities: Any potential new business, partnerships, markets, or growth areas.
+
+Challenges Identified: Problems, obstacles, or blockers that were discussed.
+
+Financial Implications: Budget concerns, costs, revenue, profit, savings, or financial forecasts.
+
+Strategic Themes: Long-term direction, priorities, or strategic positioning.
+
+Competitive Landscape: Mentions of competitors, market comparisons, or industry positioning.
+
+Risk Assessment: Risks, uncertainties, dependencies, or vulnerabilities raised.
+
+Resource Requirements: People, funding, technology, infrastructure, or time needed.
+
+Ensure every relevant point is captured without omission.
+
+If a statement touches multiple categories, include it in each relevant one.
+
+Rephrase in clear, concise business language (no verbatim transcript quotes).
+
+If no content exists for a category, explicitly write “None”.
+
+Output must be structured exactly as follows:
+
+Business Opportunities:
+1. ...
+2. ...
+
+Challenges Identified:
+1. ...
+2. ...
+
+Financial Implications:
+1. ...
+2. ...
+
+Strategic Themes:
+1. ...
+2. ...
+
+Competitive Landscape:
+1. ...
+2. ...
+
+Risk Assessment:
+1. ...
+2. ...
+
+Resource Requirements:
+1. ...
+2. ...
